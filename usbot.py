@@ -7,7 +7,7 @@ from aiogram.utils.executor import start_webhook
 TOKEN = "8463419754:AAH_4I1T-LZlgK331z9WL-cQ_WUw_5YHijY"
 
 WEBHOOK_HOST = "https://bot-1-9qsl.onrender.com"
-WEBHOOK_PATH = f"/webhook/{8463419754:AAH_4I1T-LZlgK331z9WL-cQ_WUw_5YHijY}"
+WEBHOOK_PATH = f"/webhook/{TOKEN}"
 WEBHOOK_URL = WEBHOOK_HOST + WEBHOOK_PATH
 
 WEBAPP_HOST = "0.0.0.0"
@@ -227,6 +227,7 @@ if __name__ == "__main__":
         host=WEBAPP_HOST,
         port=WEBAPP_PORT,
     )
+
 
 
 
