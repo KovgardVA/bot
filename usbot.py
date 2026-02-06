@@ -4,7 +4,7 @@ from datetime import datetime
 from aiogram import Bot, Dispatcher, types
 from aiogram.utils.executor import start_webhook
 
-TOKEN = "ВАШ_ТОКЕН"
+TOKEN = "8463419754:AAH_4I1T-LZlgK331z9WL-cQ_WUw_5YHijY"
 
 WEBHOOK_HOST = "https://YOUR_RENDER_URL"
 WEBHOOK_PATH = f"/webhook/{TOKEN}"
@@ -227,3 +227,4 @@ if name == "__main__":
         host=WEBAPP_HOST,
         port=WEBAPP_PORT,
     )
+
