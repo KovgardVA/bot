@@ -1,13 +1,12 @@
 import logging
 import aiosqlite
 from datetime import datetime
-
 from aiogram import Bot, Dispatcher, types
 from aiogram.utils.executor import start_webhook
 
-TOKEN = "8463419754:AAH_4I1T-LZlgK331z9WL-cQ_WUw_5YHijY"
+TOKEN = "ВАШ_ТОКЕН"
 
-WEBHOOK_HOST = "https://YOUR_RENDER_URL"  # позже заменим на URL Render
+WEBHOOK_HOST = "https://YOUR_RENDER_URL"
 WEBHOOK_PATH = f"/webhook/{TOKEN}"
 WEBHOOK_URL = WEBHOOK_HOST + WEBHOOK_PATH
 
@@ -20,6 +19,9 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher(bot)
 
 DB = "anon_bot.db"
+
+# Временные данные
+temp = {}
 
 async def init_db():
     async with aiosqlite.connect(DB) as db:
@@ -105,39 +107,8 @@ async def cmd_send(message: types.Message):
         label = username if username else str(user_id)
         keyboard.add(types.KeyboardButton(label))
 
+    temp[message.from_user.id] = {"step": "choose_receiver", "users": users}
     await message.answer("Выбери получателя:", reply_markup=keyboard)
-
-    @dp.message_handler(lambda msg: msg.text is not None)
-    async def choose_receiver(msg: types.Message):
-        text = msg.text.strip()
-        receiver_id = None
-
-        if text.isdigit():
-            receiver_id = int(text)
-        else:
-            for uid, uname in users:
-                if uname == text:
-                    receiver_id = uid
-                    break
-
-        if not receiver_id:
-            await msg.answer("Не удалось найти пользователя. Попробуй снова /send.")
-            return
-
-        await msg.answer("Напиши сообщение:")
-
-        @dp.message_handler(lambda m: m.text is not None)
-        async def send_anonymous(m: types.Message):
-await save_message(m.from_user.id, receiver_id, m.text)
-
-            await bot.send_message(
-                receiver_id,
-                f"📩 *Анонимное сообщение:*\n\n{m.text}",
-                parse_mode="Markdown"
-            )
-
-            await m.answer("Сообщение отправлено анонимно ✅")
-            await m.reply("Готово", reply_markup=types.ReplyKeyboardRemove())
 
 @dp.message_handler(commands=["inbox"])
 async def cmd_inbox(message: types.Message):
@@ -152,33 +123,90 @@ async def cmd_inbox(message: types.Message):
         text += f"ID {msg_id}: {msg_text[:40]}...\n"
 
     text += "\nНапиши ID сообщения, чтобы ответить."
+    temp[message.from_user.id] = {"step": "choose_message"}
     await message.answer(text)
 
-    @dp.message_handler(lambda msg: msg.text and msg.text.isdigit())
-    async def choose_message(msg: types.Message):
-        msg_id = int(msg.text)
+@dp.message_handler()
+async def all_messages_handler(message: types.Message):
+    user_id = message.from_user.id
+# если пользователь не в процессе — ничего не делаем
+    if user_id not in temp:
+        return
+
+    state = temp[user_id]["step"]
+
+    # Шаг 1: выбор получателя
+    if state == "choose_receiver":
+        users = temp[user_id]["users"]
+        text = message.text.strip()
+
+        receiver_id = None
+        if text.isdigit():
+            receiver_id = int(text)
+        else:
+            for uid, uname in users:
+                if uname == text:
+                    receiver_id = uid
+                    break
+
+        if not receiver_id:
+            await message.answer("Не удалось найти пользователя. Попробуй /send снова.")
+            temp.pop(user_id, None)
+            return
+
+        temp[user_id] = {"step": "write_message", "receiver_id": receiver_id}
+        await message.answer("Напиши сообщение:")
+
+    # Шаг 2: написание сообщения
+    elif state == "write_message":
+        receiver_id = temp[user_id]["receiver_id"]
+        await save_message(user_id, receiver_id, message.text)
+
+        await bot.send_message(
+            receiver_id,
+            f"📩 *Анонимное сообщение:*\n\n{message.text}",
+            parse_mode="Markdown"
+        )
+
+        await message.answer("Сообщение отправлено анонимно ✅", reply_markup=types.ReplyKeyboardRemove())
+        temp.pop(user_id, None)
+
+    # Шаг 3: выбор сообщения для ответа
+    elif state == "choose_message":
+        if not message.text.isdigit():
+            await message.answer("Нужно ввести ID сообщения цифрами.")
+            return
+
+        msg_id = int(message.text)
         row = await get_message(msg_id)
 
         if not row:
-            await msg.answer("Сообщение не найдено.")
+            await message.answer("Сообщение не найдено.")
+            temp.pop(user_id, None)
             return
 
         sender_id, receiver_id, msg_text = row
 
-        if receiver_id != msg.from_user.id:
-            await msg.answer("Это не твоё сообщение.")
+        if receiver_id != user_id:
+            await message.answer("Это не твоё сообщение.")
+            temp.pop(user_id, None)
             return
 
-        await msg.answer("Напиши ответ:")
+        temp[user_id] = {"step": "write_reply", "sender_id": sender_id}
+        await message.answer("Напиши ответ:")
 
-        @dp.message_handler(lambda m: m.text is not None)
-        async def send_reply(m: types.Message):
-            await bot.send_message(
-                sender_id,
-                f"📨 *Ответ на твоё анонимное сообщение:*\n\n{m.text}",
-                parse_mode="Markdown"
-            )
-            await m.answer("Ответ отправлен анонимно ✅")
+    # Шаг 4: отправка ответа
+    elif state == "write_reply":
+        sender_id = temp[user_id]["sender_id"]
+
+        await bot.send_message(
+            sender_id,
+            f"📨 *Ответ на твоё анонимное сообщение:*\n\n{message.text}",
+            parse_mode="Markdown"
+        )
+
+        await message.answer("Ответ отправлен анонимно ✅")
+        temp.pop(user_id, None)
 
 # -------------------------
 # Webhook setup
