@@ -218,7 +218,7 @@ async def on_startup(dp):
 async def on_shutdown(dp):
     await bot.delete_webhook()
 
-if name == "__main__":
+if __name__ == "__main__":
     start_webhook(
         dispatcher=dp,
         webhook_path=WEBHOOK_PATH,
@@ -227,4 +227,5 @@ if name == "__main__":
         host=WEBAPP_HOST,
         port=WEBAPP_PORT,
     )
+
 
